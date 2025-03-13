@@ -1,25 +1,43 @@
 import streamlit as st
 import pandas as pd
-from datetime import datetime, date
+from datetime import datetime
 import io
 
 st.title("🇮🇹 Stamp Duty Calculator (Italy)")
 
-# Optional Contract Number
+# Contract Number
 contract_number = st.text_input("Contract Number (optional):")
 
-# Dates Input (with clarification)
-col1, col2 = st.columns(2)
+# Surrender Type toggle
+is_partial = st.toggle("Partial Surrender (otherwise Full Surrender)")
+
+# Date Inputs
+col1, col2, col3 = st.columns(3)
 with col1:
     start_date_input = st.date_input("Technical Start Date (YYYY/MM/DD)", format="YYYY/MM/DD")
 with col2:
     end_date_input = st.date_input("Termination Date (YYYY/MM/DD)", format="YYYY/MM/DD")
+    if st.session_state.get('surrender_type') == 'Partial':
+        partial_date_input = st.date_input("Partial Surrender Request Date (YYYY/MM/DD)", format="YYYY/MM/DD")
+        PSV_str = st.text_input("Partial Surrender Value (PSV)")
+        cbps_str = st.text_input("Contract Balance Before Partial Surrender (CBPS)")
+else:
+    partial_date_input = None
 
-st.info("ℹ️ Enter dates in the format YYYY/MM/DD.")
+# Surrender type toggle
+surrender_type = st.radio("Surrender Type", ["Full", "Partial"], horizontal=True, key='surrender_type')
 
-# Convert to datetime explicitly
+st.info("ℹ️ Enter dates in YYYY/MM/DD format.")
+
+# Convert dates to datetime
 start_date = datetime.combine(start_date_input, datetime.min.time())
 end_date = datetime.combine(end_date_input, datetime.min.time())
+
+if surrender_type == "Partial":
+    partial_date = datetime.combine(partial_date_input, datetime.min.time())
+    if partial_date_input >= end_date_input or partial_date_input < start_date_input:
+        st.error("Partial surrender date must be between start and termination dates.")
+        st.stop()
 
 if start_date >= end_date:
     st.error("Termination date must be after start date!")
@@ -28,7 +46,7 @@ if start_date >= end_date:
 start_year = start_date.year
 end_year = end_date.year
 
-# Year-end Balances Input
+# Yearly balances input
 st.header("Year-end Balances (€)")
 yearly_balances = {}
 for year in range(start_year, end_year):
@@ -36,14 +54,14 @@ for year in range(start_year, end_year):
     if balance_str:
         try:
             yearly_balances[year] = float(balance_str.replace(' ', '').replace(',', '.'))
-        except ValueError:
-            st.error(f"Invalid balance for {year}.")
+        except:
+            st.error(f"Invalid balance input for {year}.")
             st.stop()
     else:
         st.error(f"Balance for {year} is required.")
         st.stop()
 
-# Surrender Value
+# Surrender value input
 surrender_str = st.text_input(f"Surrender Value ({end_date.strftime('%d.%m.%Y')})")
 if surrender_str:
     try:
@@ -55,38 +73,65 @@ else:
     st.error("Surrender value is required.")
     st.stop()
 
-# Correct days calculation (inclusive counting)
-def days_inclusive(start_dt, end_dt):
+# Partial surrender inputs
+if surrender_type == 'Partial':
+    PSV_str = st.text_input("Partial Surrender Value (PSV)")
+    CBPS_str = st.text_input("Contract Balance at Partial Surrender Date (CBPS)")
+    
+    try:
+        PSV = float(PSV_str.replace(',', '.'))
+        CBPS = float(CBPS_str.replace(',', '.'))
+        ratio = PSV / CBPS
+    except:
+        st.error("Invalid PSV or CBPS.")
+        st.stop()
+
+# Days calculation (correctly inclusive)
+def days_active(start_dt, end_dt):
     return (end_dt - start_dt).days + 1
 
 results = []
 total_stamp_fee = 0.0
 
-# Calculate stamp duty correctly:
-for year in range(start_year, end_year + 1):
-    if year == start_year:
-        start = start_date
-        end = datetime(year, 12, 31)
-        balance = yearly_balances[year]
-    elif year == end_year:
-        start = datetime(year, 1, 1)
-        end = end_date
-        balance = surrender_value
-    else:
-        start = datetime(year, 1, 1)
-        end = datetime(year, 12, 31)
-        balance = yearly_balances[year]
+# First year calculation
+days_first_year = (datetime(start_year, 12, 31) - start_date).days + 1
+stamp_first_year = yearly_balances[start_year] * 0.002 * days_first_year / 365
+results.append({
+    "Year": start_year,
+    "Balance (€)": yearly_balances[start_year],
+    "Days Active": days_first_year,
+    "Stamp Duty (€)": round(stamp_first_year, 2)
+})
+total_stamp_fee += stamp_first_year
 
-    days_active = days_inclusive(start, end)
-    annual_stamp = balance * 0.002 * days_active / 365
-    total_stamp_fee += annual_stamp
-
+# Intermediate years
+for year in range(start_year + 1, end_year):
+    balance = yearly_balances[year]
+    stamp_fee = balance * 0.002
     results.append({
         "Year": year,
         "Balance (€)": balance,
-        "Days Active": days_active,
-        "Stamp Duty (€)": round(annual_stamp, 2)
+        "Days Active": 365,
+        "Stamp Duty (€)": round(stamp_fee, 2)
     })
+    total_stamp_fee += stamp_fee
+
+# Last year calculation
+days_last_year = (end_date - datetime(end_year, 1, 1)).days + 1
+
+if surrender_type == 'Partial':
+    base_stamp = CBPS * 0.002 * days_last_year / 365
+    stamp_last_year = base_fee = base_stamp_fee = base_stamp_fee = (base_fee := surrender_value * 0.002 * days_last_year / 365) * (PSV / CBPS)
+else:
+    stamp_last_year = surrender_value * 0.002 * days_last_year / 365
+
+results.append({
+    "Year": end_year,
+    "Balance (€)": surrender_value,
+    "Days Active": days_last_year,
+    "Stamp Duty (€)": round(stamp_last_year, 2)
+})
+total_stamp_fee += stamp_last_year
 
 # Display Results
 st.subheader("📑 Calculation Results")
@@ -95,21 +140,18 @@ st.dataframe(df_results, hide_index=True)
 
 st.markdown(f"### **Total Stamp Duty Payable:** €{total_stamp_fee:.2f}")
 
-# Excel Generation with correct contract_number
+# Excel Generation
 output = io.BytesIO()
 with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
     workbook = writer.book
     worksheet = workbook.add_worksheet("Stamp Duty Audit")
     writer.sheets["Stamp Duty Audit"] = worksheet
 
-    # Write Contract Number at top
     worksheet.write('A1', "Contract Number")
     worksheet.write('B1', contract_number or "N/A")
 
-    # Write results table starting row 3
     df_results.to_excel(writer, sheet_name="Stamp Duty Audit", startrow=3, index=False)
 
-    # Total Stamp Duty below the table
     total_row = len(df_results) + 5
     worksheet.write(total_row, 2, "Total Stamp Duty (€)")
     worksheet.write(total_row, 3, round(total_stamp_fee, 2))
