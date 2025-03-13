@@ -5,15 +5,16 @@ import io
 
 st.title("🇮🇹 Stamp Duty Calculator (Italy)")
 
-# Optional Contract Number
-contract_number = st.text_input("Contract Number (optional):")
-
-# Dates input with format clarification
+# Input dates
 col1, col2 = st.columns(2)
 with col1:
-    start_date = st.date_input("Technical Start of Contract (YYYY/MM/DD)", format="YYYY/MM/DD")
+    start_date_input = st.date_input("Technical Start of Contract (YYYY/MM/DD)", format="YYYY/MM/DD")
 with col2:
-    end_date = st.date_input("End Date (Termination Date) (YYYY/MM/DD)", format="YYYY/MM/DD")
+    end_date_input = st.date_input("End Date (Termination Date) (YYYY/MM/DD)", format="YYYY/MM/DD")
+
+# Convert to datetime explicitly
+start_date = datetime.combine(start_date_input, datetime.min.time())
+end_date = datetime.combine(end_date_input, datetime.min.time())
 
 st.info("ℹ️ Please input dates in the format YYYY/MM/DD.")
 
