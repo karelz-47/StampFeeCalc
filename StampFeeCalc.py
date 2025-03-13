@@ -13,19 +13,23 @@ is_partial = st.toggle("Partial Surrender (otherwise Full Surrender)")
 
 # Date Inputs
 col1, col2, col3 = st.columns(3)
+
 with col1:
     start_date_input = st.date_input("Technical Start Date (YYYY/MM/DD)", format="YYYY/MM/DD")
+
 with col2:
     end_date_input = st.date_input("Termination Date (YYYY/MM/DD)", format="YYYY/MM/DD")
-    if st.session_state.get('surrender_type') == 'Partial':
-        partial_date_input = st.date_input("Partial Surrender Request Date (YYYY/MM/DD)", format="YYYY/MM/DD")
-        PSV_str = st.text_input("Partial Surrender Value (PSV)")
-        cbps_str = st.text_input("Contract Balance Before Partial Surrender (CBPS)")
-else:
-    partial_date_input = None
 
-# Surrender type toggle
+# Surrender type toggle clearly placed below
 surrender_type = st.radio("Surrender Type", ["Full", "Partial"], horizontal=True, key='surrender_type')
+
+# Additional inputs if Partial surrender selected
+if surrender_type == 'Partial':
+    with col3:
+        partial_date_input = st.date_input("Partial Surrender Request Date (YYYY/MM/DD)", format="YYYY/MM/DD")
+    
+    PSV_str = st.text_input("Partial Surrender Value (PSV)")
+    CBPS_str = st.text_input("Contract Balance at Partial Surrender Date (CBPS)")
 
 st.info("ℹ️ Enter dates in YYYY/MM/DD format.")
 
