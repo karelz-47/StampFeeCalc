@@ -120,4 +120,52 @@ for year in range(start_year + 1, end_year):
     total_stamp_fee += stamp_fee
 
 # Last year calculation (clearly different handling for partial)
-days_last_year = days_active(datetime(end
+days_last_year = days_active(datetime(end_year, 1, 1), end_date)
+
+if surrender_type == 'Partial':
+    base_stamp = CBPS * 0.002 * days_last_year / 365
+    stamp_last_year = base_stamp * ratio
+else:
+    stamp_last_year = surrender_value * 0.002 * days_last_year / 365
+
+results.append({
+    "Year": end_year,
+    "Balance (€)": surrender_value,
+    "Days Active": days_last_year,
+    "Stamp Duty (€)": round(stamp_last_year, 2)
+})
+total_stamp_fee += stamp_last_year
+
+# Results Display
+st.subheader("📑 Calculation Results")
+df_results = pd.DataFrame(results)
+st.dataframe(df_results, hide_index=True)
+
+st.markdown(f"### **Total Stamp Duty Payable:** €{total_stamp_fee:.2f}")
+
+# Excel Generation
+output = io.BytesIO()
+with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
+    workbook = writer.book
+    worksheet = workbook.add_worksheet("Stamp Duty Audit")
+    writer.sheets["Stamp Duty Audit"] = worksheet
+
+    worksheet.write('A1', "Contract Number")
+    worksheet.write('B1', contract_number or "N/A")
+
+    df_results.to_excel(writer, sheet_name="Stamp Duty Audit", startrow=3, index=False)
+
+    total_row = len(df_results) + 5
+    worksheet.write(total_row, 2, "Total Stamp Duty (€)")
+    worksheet.write(total_row, 3, round(total_stamp_fee, 2))
+
+output.seek(0)
+
+# Excel download button
+xls_name = f"stamp_duty_{contract_number or 'contract'}.xlsx"
+st.download_button(
+    label="📥 Download Excel Audit File",
+    data=output,
+    file_name=xls_name,
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+)
