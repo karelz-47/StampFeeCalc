@@ -8,7 +8,7 @@ st.title("🇮🇹 Stamp Duty Calculator (Italy)")
 # Contract Number
 contract_number = st.text_input("Contract Number (optional):")
 
-# Surrender type selection (Single toggle clearly here)
+# Surrender type selection
 surrender_type = st.radio("Surrender Type", ["Full", "Partial"], horizontal=True)
 
 # Date Inputs
@@ -59,7 +59,7 @@ for year in range(start_year, end_year):
         st.error(f"Balance for {year} is required.")
         st.stop()
 
-# Surrender or Partial surrender values clearly based on toggle
+# Surrender or Partial surrender inputs
 if surrender_type == "Partial":
     PSV_str = st.text_input("Partial Surrender Value (PSV)")
     CBPS_str = st.text_input("Contract Balance at Partial Surrender Date (CBPS)")
@@ -67,7 +67,7 @@ if surrender_type == "Partial":
     if not PSV_str or not CBPS_str:
         st.error("PSV and CBPS values are required.")
         st.stop()
-    
+
     try:
         PSV = float(PSV_str.replace(',', '.'))
         CBPS = float(CBPS_str.replace(',', '.'))
@@ -107,7 +107,7 @@ results.append({
 })
 total_stamp_fee += stamp_first_year
 
-# Intermediate years calculation
+# Intermediate years
 for year in range(start_year + 1, end_year):
     balance = yearly_balances[year]
     stamp_fee = balance * 0.002
@@ -119,12 +119,25 @@ for year in range(start_year + 1, end_year):
     })
     total_stamp_fee += stamp_fee
 
-# Last year calculation (clearly different handling for partial)
+# Last year calculation (clearly separated by type)
 days_last_year = days_active(datetime(end_year, 1, 1), end_date)
 
 if surrender_type == 'Partial':
-    base_stamp = CBPS * 0.002 * days_last_year / 365
-    stamp_last_year = base_stamp * ratio
+    # STEP 1: Calculate accrued stamp fees until previous year
+    accrued_stamp_until_prev_year = 0
+    for year in range(start_year, end_year):
+        balance = yearly_balances[year]
+        days_in_year = 365 if year != start_year else days_active(start_date, datetime(year, 12, 31))
+        accrued_stamp_until_prev_year += balance * 0.002 * days_in_year / 365
+
+    previous_years_fee_ratio = accrued_stamp_until_prev_year * ratio
+
+    # STEP 2: Current year fee pro-rata on PSV
+    days_current_year = days_active(datetime(end_year, 1, 1), partial_date)
+    current_year_fee = PSV * 0.002 * days_current_year / 365
+
+    # STEP 3: Sum both
+    stamp_last_year = previous_years_fee_ratio + current_year_fee
 else:
     stamp_last_year = surrender_value * 0.002 * days_last_year / 365
 
@@ -136,7 +149,7 @@ results.append({
 })
 total_stamp_fee += stamp_last_year
 
-# Results Display
+# Display Results
 st.subheader("📑 Calculation Results")
 df_results = pd.DataFrame(results)
 st.dataframe(df_results, hide_index=True)
